@@ -22,7 +22,7 @@ An Identity is an optional name associated with an account. This module was intr
 
 ## Hub
 
-In reticulum terminology, a "Hub" refers to a single room. "hub" and "room" are used interchangeably in this doc. A Hub consists of fields that are required for basic use of a room, including the room's name, description, SID, entry mode, as well as various other fields that relate to specific room features. The hub.ex file also contains Canada authorization definitions for actions related to rooms and accounts.
+In reticulum terminology, a "Hub" refers to a single room. "hub" and "room" are used interchangeably in this doc. A Hub consists of fields that are required for basic use of a room, including the room's name, description, SID, entry mode, as well as various other fields that relate to specific room features. The hub.ex file also contains [Canada](https://hex.pm/packages/canada) authorization definitions for actions related to rooms and accounts.
 
 ### Notable fields
 
@@ -42,9 +42,19 @@ In reticulum terminology, a "Hub" refers to a single room. "hub" and "room" are 
 - `allow_promotion : boolean` - If set to true, this room could be shown on the front page as a "public" room.
 - `room_size : integer` - The maximum number of users allowed in the room. This is not strictly enforced, since it is only used by client-side code, to prevent entry into a room.
 
+## HubChannel
+
+The HubChannel module is a Phoenix Channel that handles and broadcasts real-time messages for avatar movement and other actions and activity in a Hubs room. Some of the messages sent through the hub channel are subject to authorization rules based on user permissions. It is also used to gate entry into a room, based on permissions and room state. The module also handles presence tracking, which is used to track the existence and metadata about users in a room, and broadcast that information to all other users in the room.
+
+The references to "naf" in this channel are related to the [networked-aframe](https://github.com/mozillareality/networked-aframe) library used by the Hubs client.
+
 ## HubRoleMembership
 
 The HubRoleMembership module is used to establish a one-to-many relationship between Hubs rooms and Accounts. If a user has a membership in a room, they are given moderation capabilities in that room. There is only one implicit role defined as of this writing.
+
+## AccountFavorite
+
+The AccountFavorite module is used to store rooms that are favorited by a user.
 
 ## Sids
 
@@ -64,7 +74,11 @@ A HubInvite provides an access control mechanism for rooms. If a room has a HubI
 
 ## HubBinding
 
-The HubBinding mechanism is used to bind a hub's access and authorization to an external community service, such as Discord or Slack. This mechanism is used by the Hubs Discord Bot to bind Hubs rooms to a Discord channel. When a room is bound to a community channel, access to that Hub room is gated with an account associated with that community, via OAuth, and the permissions in a room are determined by a user's level of access in that community channel. For example, moderators of a Discord server would also be moderators of Hubs rooms bound to channels in that Discord server. Users' Display names and  identifier information are also pulled from the external community API, in order to display them on avatars in the Hubs room.
+The HubBinding mechanism is used to bind a room's access and authorization to an external community service, such as Discord or Slack. This mechanism is used by the Hubs Discord Bot to bind Hubs rooms to a Discord channel. When a room is bound to a community channel, access to that Hub room is gated with an account associated with that community, via OAuth, and the permissions in a room are determined by a user's level of access in that community channel. For example, moderators of a Discord server would also be moderators of Hubs rooms bound to channels in that Discord server. Users' Display names and  identifier information are also pulled from the external community API, in order to display them on avatars in the Hubs room.
+
+## OAuthProvider
+
+The OAuthProvider module is used to store OAuth information for a Hubs account, to enable the HubBinding mechanism.
 
 ## Project
 
@@ -120,11 +134,15 @@ An OwnedFile represents a file on disk that belongs to a particular user. OwnedF
 
 ## CachedFile
 
-A CachedFile represents a file on disk that is used to cache media pulled from the web. Typically these are [Sketchfab](https://sketchfab.com/) models, or screenshots of websites captured by Hubs' screenshot service, "speelycaptor". CachedFiles are created by the MediaResolver module. CachedFiles have a `cache_key` which is used to lookup the file, and are vacuumed by a scheduled job when they have fallen out of use.
+A CachedFile represents a file on disk that is used to cache media pulled from the web. Typically these are [Sketchfab](https://sketchfab.com/) models, or screenshots of websites captured by Hubs' screenshot service, [photomnemonic](https://github.com/MozillaReality/photomnemonic). CachedFiles are created by the MediaResolver module. CachedFiles have a `cache_key` which is used to lookup the file, and are vacuumed by a scheduled job when they have fallen out of use.
 
 ## StorageUsed
 
 The StorageUsed module makes system calls to determine the amount of file storage used by a Hubs server. It is called periodically via a configured [CacheX](https://hex.pm/packages/cachex) cache-warmer worker job.
+
+## Application
+
+The Application module notably contains caching configurations for various data that is produced by other modules.
 
 ## Router
 
@@ -134,6 +152,10 @@ As with all [Phoenix](https://www.phoenixframework.org/) applications, the Route
 
 The PageController module is notable in that it acts as a fallback to endpoints that are not explicitly defined in the Route module. It handles the rendering of all of Hubs' HTML pages, and injects relevant headers, meta data, configuration data, and extra content into those pages. The PageController also includes a basic CORS proxy for proxying content from the web, when importing it into a Hubs room, and a proxy to an image resizing service. The module also handles static assets, and configurable assets.
 
+## PageOriginWarmer
+
+The PageOriginWarmer module is used to retrieve and cache a list of well-known static assets, mostly HTML pages, for the Hubs client. The pages are also split into two chunks, at the point where meta tags should be inserted.
+
 ## MediaResolver
 
 The MediaResolver module is used to retrieve metadata about media from across the web. MediaResolver will attempt to resolve media for a set of well-known media sources, or fallback to [Open Graph](https://ogp.me/) image meta data, or finally a screenshot of the given URL. In most cases, MediaResolver does not return the media itself, just metadata about media that is available at the URL.
@@ -142,9 +164,37 @@ The MediaResolver module is used to retrieve metadata about media from across th
 
 The MediaSearch module is used to search and list media from Hubs' own content (avatars, scenes, rooms, assets), as well as media from popular media sites, if their API integrations are configured on the Hubs server.
 
+## AppConfig
+
+The AppConfig module is used to store runtime configurable values that are configured by a Hubs administrator. Configs are defined in the [schema.toml](https://github.com/mozilla/hubs/blob/master/src/schema.toml) in the Hubs client repo. Most config values are primitive types, but configs can also be files or json structures. App configs only contain values that are suitable for public use.
+
 ## Meta
 
 The Meta module is used to collect various meta information about a Hubs server. It is used by the PageController module to inject that meta data into HTML pages, and by the MetaController module to make the meta data available via an API. This meta information is used by the client code to connect to phoenix channels, to determine if various third-party integrations have been configured, and by the admin panel to determine if a Hubs server has been setup with content, or is over its storage quota.
+
+## Email
+
+The Email module is used to produce emails with magic links, used to sign into Hubs accounts. The emails are sent via the [Bamboo](https://hex.pm/packages/bamboo) email library.
+
+## LoginToken
+
+The LoginToken module is used to generate and persist short-lived tokens for magic link emails.
+
+## AuthChannel
+
+The AuthChannel module handles authentication requests used in the magic link login mechanism.
+
+## LinkChannel
+
+The LinkChannel module is a short-lived channel that is used to transfer Hubs account information from one device to another while redirecting a user to a Hubs room using a short link code. This is primarily used to make it easier to join a Hubs room from a standalone VR headset. The payload sent through the channel is produced and consumed by the Hubs client code.
+
+## Locking
+
+The Locking module is used to capture and release global locks across reticulum servers, using the common PostgreSQL database, and [advisory locks](https://www.postgresql.org/docs/9.1/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS). Locks are used for global operations such as database migrations, and vacuum jobs.
+
+## Crypto
+
+The Crypto module contains various cryptographic functions for encrypting, decrypting and hashing data.
 
 ## SessionStat
 
@@ -154,9 +204,33 @@ The SessionStat module is used to store analytics about Hubs room usage. It reco
 
 The NodeStat module is used to store analytics about a server's usage. In particular it periodically records how many users were simultaneously present in rooms at any given time, via the StatsJob module.
 
+## RoomAssigner
+
+The RoomAssigner module is used to assign a WebRTC server to a Hubs room as needed. The module picks a server based on its current load, using a weighted sample.
+
+## JanusLoadStatus
+
+The JanusLoadStatus module is use to query and cache the current load and meta information about WebRTC servers that are available to a Hubs server. "Janus" is a misnomer, it refers to the previous WebRTC server that Hubs used, but it now uses [dialog](https://github.com/mozilla/dialog).
+
+## Speelycaptor
+
+The Speelycaptor module is used to upload, convert and retrieve video files via Hubs' [speelycaptor](https://github.com/mozilla/speelycaptor) video conversion service.
+
 ## Coturn
 
 Used to generate TURN info for the [coturn](https://github.com/coturn/coturn) server, when TURN is enabled. TURN info is sent to the client via `generate_turn_info` in the Hub module.
+
+## PeerageProvider
+
+The PeerageProvider module is used to enable Erlang node discovery via the [Peerage](https://hex.pm/packages/peerage) library. PeerageProvider uses the Habitat module to query the [habitat](https://docs.chef.io/habitat) census, used in Hubs Cloud.
+
+## WebPushSubscription
+
+The WebPushSubscription is used to register [Web Push](https://developer.mozilla.org/en-US/docs/Web/API/Push_API) subscriptions. This was used to subscribe to Hubs room events, such as when a user has entered a room you've created, but this feature is currently missing from the Hubs client UI.
+
+## SupportSubscription
+
+The SupportSubscription was used in a feature that allowed users to request support from a Hubs team member, but this capability is no longer available.
 
 ## GraphQL Modules
 
